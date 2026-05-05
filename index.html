@@ -140,7 +140,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .modal input{width:100%;font-size:13px;padding:10px 11px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text);margin-bottom:10px;font-family:'Courier New',monospace;}
 .modal-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .empty{text-align:center;padding:2.5rem 1rem;color:var(--text2);font-size:13px;}
-.rm-btn{font-size:10px;color:var(--text3);background:none;border:none;cursor:pointer;padding:2px 0;display:block;margin-top:2px;}
+.irow{cursor:pointer;} .irow:active{background:var(--surface2);} .edit-modal{background:var(--surface);border-radius:20px 20px 0 0;padding:18px 16px 32px;width:100%;max-width:430px;max-height:85vh;overflow-y:auto;} .edit-modal h2{font-size:15px;font-weight:600;margin-bottom:12px;} .del-btn{width:100%;background:none;color:var(--coral);border:0.5px solid var(--coral);border-radius:10px;padding:12px;font-size:14px;font-weight:500;margin-top:8px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
 </style>
 </head>
 <body>
@@ -295,6 +295,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <div class="toast-wrap"><div class="toast" id="toast"></div></div>
 
+
+<!-- EDIT INVOICE MODAL -->
+<div class="modal-bg" id="emodal">
+  <div class="edit-modal">
+    <h2>Edit invoice</h2>
+    <div class="ff"><label>Property</label><select id="e-prop"></select></div>
+    <div class="two">
+      <div class="ff"><label>Date</label><input type="date" id="e-date"></div>
+      <div class="ff"><label>Tax year</label><select id="e-yr"><option>2026</option><option>2025</option><option>2024</option><option>2023</option></select></div>
+    </div>
+    <div class="ff"><label>Vendor</label><input type="text" id="e-vendor"></div>
+    <div class="two">
+      <div class="ff"><label>Invoice no.</label><input type="text" id="e-invno"></div>
+      <div class="ff"><label>Amount (R)</label><input type="number" id="e-amt" step="0.01" inputmode="decimal"></div>
+    </div>
+    <div class="ff"><label>Category</label>
+      <select id="e-cat">
+        <option value="p">Plumbing</option><option value="e">Electrical</option>
+        <option value="g">General maintenance</option><option value="a">Appliance repair</option>
+        <option value="s">Structural / painting</option><option value="d">Garden / exterior</option>
+      </select></div>
+    <div class="ff"><label>Description</label><textarea id="e-desc"></textarea></div>
+    <div class="ff"><label>VAT</label>
+      <select id="e-vat"><option value="y">VAT inclusive</option><option value="n">No VAT</option><option value="x">Vendor not VAT registered</option></select></div>
+    <button class="save-btn" onclick="saveEdit()">Save changes</button>
+    <button class="del-btn" onclick="deleteEdit()">Remove invoice</button>
+    <button class="sec-btn" onclick="closeEdit()">Cancel</button>
+  </div>
+</div>
+
 <div class="modal-bg" id="kmodal">
   <div class="modal">
     <h2>Anthropic API key</h2>
@@ -417,14 +447,58 @@ function renderIList(){
   var el=document.getElementById('ilist');
   if(!list.length){el.innerHTML='<div class="empty">No invoices match these filters</div>';return;}
   el.innerHTML='<div class="card">'+list.map(function(i){
-    return '<div class="irow">'+ipath(i.cat)+'<div class="ibody"><div class="ivendor">'+i.vendor+'</div><div class="imeta"><span class="badge b'+i.cat+'">'+CATS[i.cat]+'</span> \u00b7 '+i.date+'</div>'+(i.desc?'<div class="imeta" style="margin-top:1px">'+i.desc+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0"><div class="iamt">'+fmt(i.amt)+'</div><button class="rm-btn" onclick="delInv('+i.id+')">remove</button></div></div>';
+    return '<div class="irow" onclick="openEdit('+i.id+')">'+ipath(i.cat)+'<div class="ibody"><div class="ivendor">'+i.vendor+'</div><div class="imeta"><span class="badge b'+i.cat+'">'+CATS[i.cat]+'</span> \u00b7 '+i.date+'</div>'+(i.desc?'<div class="imeta" style="margin-top:1px">'+i.desc+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0"><div class="iamt">'+fmt(i.amt)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px">tap to edit</div></div></div>';
   }).join('')+'</div>';
 }
 
-function delInv(id){
-  if(!confirm('Remove this invoice?'))return;
-  invoices=invoices.filter(function(i){return i.id!==id;});
-  svInv();renderIList();renderIPills();toast('Invoice removed');
+var editingId=null;
+
+function openEdit(id){
+  var inv=invoices.find(function(i){return i.id===id;});
+  if(!inv)return;
+  editingId=id;
+  // Populate property dropdown
+  var sel=document.getElementById('e-prop');
+  sel.innerHTML=properties.map(function(p){return '<option value="'+p.id+'"'+(p.id===inv.prop?' selected':'')+'>'+p.short+'</option>';}).join('');
+  document.getElementById('e-date').value=inv.date||'';
+  document.getElementById('e-vendor').value=inv.vendor||'';
+  document.getElementById('e-invno').value=inv.invno||'';
+  document.getElementById('e-amt').value=inv.amt||'';
+  document.getElementById('e-cat').value=inv.cat||'g';
+  document.getElementById('e-desc').value=inv.desc||'';
+  document.getElementById('e-vat').value=inv.vat||'y';
+  // Set tax year
+  var s=document.getElementById('e-yr');
+  for(var i=0;i<s.options.length;i++)if(s.options[i].value==inv.yr){s.selectedIndex=i;break;}
+  document.getElementById('emodal').classList.add('open');
+}
+
+function closeEdit(){
+  document.getElementById('emodal').classList.remove('open');
+  editingId=null;
+}
+
+function saveEdit(){
+  var idx=invoices.findIndex(function(i){return i.id===editingId;});
+  if(idx<0)return;
+  var amt=parseFloat(document.getElementById('e-amt').value);
+  if(!document.getElementById('e-vendor').value.trim()||isNaN(amt)||amt<=0){toast('Enter vendor and amount');return;}
+  invoices[idx].prop=document.getElementById('e-prop').value;
+  invoices[idx].date=document.getElementById('e-date').value;
+  invoices[idx].vendor=document.getElementById('e-vendor').value.trim();
+  invoices[idx].invno=document.getElementById('e-invno').value;
+  invoices[idx].cat=document.getElementById('e-cat').value;
+  invoices[idx].amt=amt;
+  invoices[idx].desc=document.getElementById('e-desc').value;
+  invoices[idx].vat=document.getElementById('e-vat').value;
+  invoices[idx].yr=document.getElementById('e-yr').value;
+  svInv();closeEdit();renderIList();renderIPills();renderHome();toast('Invoice updated');
+}
+
+function deleteEdit(){
+  if(!confirm('Remove this invoice? This cannot be undone.'))return;
+  invoices=invoices.filter(function(i){return i.id!==editingId;});
+  svInv();closeEdit();renderIList();renderIPills();renderHome();toast('Invoice removed');
 }
 
 // ── Scan ──────────────────────────────────────────────────
